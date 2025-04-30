@@ -12,7 +12,7 @@
       color: #e5e5e5;
     }
     nav {
-      background: #111;
+      background: transparent;
       color: #e50914;
       padding: 12px 20px;
       display: flex;
@@ -37,13 +37,32 @@
       text-shadow: 2px 2px 10px black;
       animation: fadeIn 2s ease-in;
     }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: scale(1.05); }
-      to { opacity: 1; transform: scale(1); }
+    .hero .video-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    .hero img,
+    .hero video {
+      width: 100%;
+      height: 100%;
+      object-fit:fill;
+      position: absolute;
+      top: 0;
+      left: 0;
+      transition: all 0.3s ease;
+      border-radius: 0;
+    }
+    .hero video {
+      display: none;
     }
     .hero h2 {
       font-size: 3rem;
       margin: 0;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(1.05); }
+      to { opacity: 1; transform: scale(1); }
     }
     .content {
       padding: 20px;
@@ -117,11 +136,21 @@
       vertical-align: top;
       text-align: center;
     }
-    .slider-movie img {
+    .video-container {
+      position: relative;
       width: 100%;
       height: 225px;
+    }
+    .video-container img,
+    .video-container video {
+      width: 100%;
+      height: 100%;
       border-radius: 4px;
       object-fit: cover;
+      transition: all 0.3s ease;
+    }
+    .video-container video {
+      display: none;
     }
   </style>
 </head>
@@ -130,8 +159,11 @@
     <h1>🍿 Netfilms</h1>
   </nav>
 
-  <section class="hero">
-    <h2>Welcome to Netfilms</h2>
+  <section class="hero" onmouseenter="playPreview(this)" onmouseleave="stopPreview(this)">
+    <div class="video-container">
+      <img src="https://image.tmdb.org/t/p/original/8Y43POKjjKDGI9MH89NW0NAzzp8.jpg" alt="Hero Image" />
+      <video src="WhatsApp Video 2025-04-30 at 10.41.34_9e908e1a.mp4" muted loop></video>
+    </div>
   </section>
 
   <div class="content">
@@ -160,7 +192,6 @@
     <pre id="queryResults"></pre>
   </div>
 
-  <script src="basicUI.js"></script>
   <script>
     const tmdbKey = "0e6663a46638b8b900233a5f8d39ef44";
 
@@ -172,16 +203,108 @@
         const card = document.createElement("div");
         card.className = "slider-movie";
         card.innerHTML = `
-          <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" alt="${movie.title}" />
+          <div class="video-container" onmouseenter="playPreview(this)" onmouseleave="stopPreview(this)">
+            <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" alt="${movie.title}" />
+            <video src="WhatsApp Video 2025-04-30 at 10.41.34_9e908e1a.mp4" muted loop></video>
+          </div>
         `;
         container.appendChild(card);
       });
     }
 
+    function playPreview(container) {
+      const img = container.querySelector("img");
+      const video = container.querySelector("video");
+      if (img && video) {
+        img.style.display = "none";
+        video.style.display = "block";
+        video.play();
+      }
+    }
+
+    function stopPreview(container) {
+      const img = container.querySelector("img");
+      const video = container.querySelector("video");
+      if (img && video) {
+        video.pause();
+        video.currentTime = 0;
+        video.style.display = "none";
+        img.style.display = "block";
+      }
+    }
+
+    async function loadMovies() {
+      const res = await fetch('/api/movies');
+      const movies = await res.json();
+      const list = document.getElementById('movieList');
+      list.innerHTML = '';
+      movies.forEach(movie => {
+        const item = document.createElement('li');
+        item.innerText = `${movie.title} (${movie.releaseYear}) - Rating: ${movie.rating}`;
+        list.appendChild(item);
+      });
+    }
+
+    async function addMovie() {
+      const title = document.getElementById('title').value;
+      const genre = document.getElementById('genre').value.split(',').map(g => g.trim());
+      const releaseYear = parseInt(document.getElementById('year').value);
+      const rating = parseFloat(document.getElementById('rating').value);
+      const duration = parseInt(document.getElementById('duration').value);
+      const cast = document.getElementById('cast').value.split(',').map(c => c.trim());
+
+      const res = await fetch('/api/movies/add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title, genre, releaseYear, rating, duration, cast, views: 0 })
+      });
+
+      if (res.ok) {
+        alert('Movie added!');
+        loadMovies();
+      } else {
+        alert('Failed to add movie.');
+      }
+    }
+
+    const queryList = [
+      ["Premium Users", "/api/queries/premium-users"],
+      ["Popular Movies", "/api/queries/popular-movies"],
+      ["Non-Male Users", "/api/queries/non-male-users"],
+      ["Users With Watchlists", "/api/queries/watchlists"],
+      ["Action + Adventure Movies", "/api/queries/action-adventure"],
+      ["Top Viewed Movies", "/api/queries/top-viewed"],
+      ["This Year's Watch History", "/api/queries/watch-history"],
+      ["Add Drama to Inception", "/api/queries/add-drama"],
+      ["Comments with User Info", "/api/queries/comments-users"],
+      ["Movies per Genre", "/api/queries/genre-counts"]
+    ];
+
     document.addEventListener("DOMContentLoaded", () => {
       loadSlider("trending/movie/day", "slider");
       loadSlider("movie/top_rated", "slider-top-rated");
+
+      const container = document.getElementById("queryButtons");
+      queryList.forEach(([label, endpoint]) => {
+        const btn = document.createElement("button");
+        btn.innerText = label;
+        btn.onclick = () => runQuery(endpoint);
+        container.appendChild(btn);
+      });
     });
+
+    async function runQuery(endpoint) {
+      const res = await fetch(endpoint, { method: endpoint.includes("add-drama") ? 'PUT' : 'GET' });
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        document.getElementById("queryResults").innerText = JSON.stringify(data, null, 2);
+      } catch {
+        document.getElementById("queryResults").innerText = text;
+      }
+    }
   </script>
 </body>
 </html>
